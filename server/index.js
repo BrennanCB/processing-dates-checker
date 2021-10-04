@@ -62,7 +62,7 @@ console.log(user);
             if (!user) {
               await new ProcessingDates({
                 updatedAt: lastupdatedDate,
-                processed,
+                processed: processingDate,
               }).save();
               console.log("added");
             }
