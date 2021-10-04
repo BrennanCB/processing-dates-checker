@@ -13,7 +13,6 @@ mongoose.connect(keys.mongoURI, {
   useUnifiedTopology: true,
 });
 
-
 const app = express();
 
 let port = process.env.PORT;
@@ -21,7 +20,6 @@ let port = process.env.PORT;
 if (port == null || port == "") {
   port = 3000;
 }
-
 
 const ProcessingDates = mongoose.model("processingDates");
 
@@ -110,7 +108,10 @@ app.get("/estimated-completion", async (req, res) => {
   let aveDiff = 0;
 
   if (skipHistory === "true") {
-    const { updatedAt, processed } = await getCurrentDates(true);
+    const res = await getCurrentDates(true);
+    console.log(res);
+
+    const { updatedAt, processed } = res;
     aveDiff = moment(updatedAt).diff(processed);
   } else {
     const dates = await getPastDates();
@@ -136,7 +137,6 @@ app.get("/estimated-completion", async (req, res) => {
       : estimate.startOf("day");
 
   res.send(roundUp.toISOString());
-  // }, true);
 });
 
 app.listen(port, () => {
