@@ -57,8 +57,6 @@ const getCurrentDates = (add) => {
               updatedAt: lastupdatedDate,
             });
 
-console.log(user);
-
             if (!user) {
               await new ProcessingDates({
                 updatedAt: lastupdatedDate,
