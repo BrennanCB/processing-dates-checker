@@ -57,9 +57,11 @@ const getCurrentDates = (add) => {
               updatedAt: lastupdatedDate,
             });
 
+console.log(user);
+
             if (!user) {
               await new ProcessingDates({
-                updatedAt,
+                updatedAt: lastupdatedDate,
                 processed,
               }).save();
               console.log("added");
