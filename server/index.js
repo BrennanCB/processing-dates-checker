@@ -1,8 +1,22 @@
 const express = require("express");
+const moment = require("moment");
+
+const mongoose = require("mongoose");
+const keys = require("./config/keys");
+
 const https = require("https");
+
+require("./models/processing-dates");
+
+mongoose.connect(keys.mongoURI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
 
 const app = express();
 const port = 3000;
+
+const ProcessingDates = mongoose.model("processingDates");
 
 const findFunction = (data1, searchString, endString) => {
   const startIndex =
@@ -13,9 +27,9 @@ const findFunction = (data1, searchString, endString) => {
   return newString.substring(0, newString.indexOf(endString)).trim();
 };
 
-app.get("/current-date", (req, res) => {
-  https
-    .get(
+const getCurrentDates = (add) => {
+  return new Promise((resolve) => {
+    https.get(
       "https://enterprise.gov.ie/en/What-We-Do/Workplace-and-Skills/Employment-Permits/Current-Application-Processing-Dates/",
       (resp) => {
         let data = "";
@@ -27,29 +41,97 @@ app.get("/current-date", (req, res) => {
         });
 
         // The whole response has been received. Print out the result.
-        resp.on("end", () => {
-          console.log(data.length);
-
+        resp.on("end", async () => {
           const searchString = '<tr><td>Trusted Partner</td><td class="left">';
 
           const lastupdatedDate = findFunction(data, "As of ", ",");
           const processingDate = findFunction(data, searchString, "<");
-          console.log(data.length);
-          console.log("test", lastupdatedDate, processingDate);
 
-          res.send({
-            lastUpdated: lastupdatedDate,
-            processingDate,
+          if (add) {
+            const user = await ProcessingDates.findOne({
+              updatedAt: lastupdatedDate,
+            });
+
+            if (!user) {
+              await new ProcessingDates({
+                updatedAt,
+                processed,
+              }).save();
+              console.log("added");
+            }
+          }
+
+          resolve({
+            updatedAt: new Date(lastupdatedDate),
+            processed: new Date(processingDate),
           });
         });
       }
-    )
-    .on("error", (err) => {
-      console.log("Error: " + err.message);
-      res.status(500).send("Error: " + err.message);
-    });
+    );
+  });
+};
+
+const getPastDates = async () => {
+  const dates = await ProcessingDates.find()
+    .sort("updatedAt")
+    .select("updatedAt processed");
+
+  return dates;
+};
+
+app.get("/past-dates", async (req, res) => {
+  res.send(await getPastDates());
+});
+
+app.get("/current-date", async (req, res) => {
+  const { updatedAt, processed } = await getCurrentDates(true);
+
+  res.send({
+    updatedAt,
+    processed,
+  });
+});
+
+app.get("/estimated-completion", async (req, res) => {
+  let requestDate = req.query.date;
+  let skipHistory = req.query.skipHistory;
+
+  console.log(req.query);
+
+  if (!requestDate) res.status(500).send("Date param is required");
+
+  let aveDiff = 0;
+
+  if (skipHistory === "true") {
+    const { updatedAt, processed } = await getCurrentDates(true);
+    aveDiff = moment(updatedAt).diff(processed);
+  } else {
+    const dates = await getPastDates();
+
+    const allDiffs = dates.map(({ updatedAt, processed }) =>
+      moment(updatedAt).diff(processed)
+    );
+
+    console.log(allDiffs);
+
+    aveDiff =
+      allDiffs.reduce((total, current) => total + current, 0) / allDiffs.length;
+  }
+
+  const estimate = moment(new Date(requestDate)).add(aveDiff);
+
+  var roundUp =
+    estimate.hour() ||
+    estimate.minute() ||
+    estimate.second() ||
+    estimate.millisecond()
+      ? estimate.add(1, "day").startOf("day")
+      : estimate.startOf("day");
+
+  res.send(roundUp.toISOString());
+  // }, true);
 });
 
 app.listen(port, () => {
-  console.log("stuff");
+  console.log("started");
 });
